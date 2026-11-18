@@ -18,6 +18,15 @@ import { toDays } from "./public/logic.js";
 const app = express();
 const PORT = process.env.PORT ?? 3000;
 
+if (!process.env.ADMIN_TOKEN) {
+  console.error(
+    "ADMIN_TOKEN is not set. Copy .env.example to .env."
+  );
+  process.exit(1);
+}
+
+const counts = {};
+
 const CITIES = {
   seoul: { name: "Seoul", lat: 37.566, lon: 126.9784 },
   daejeon: { name: "Daejeon", lat: 36.3504, lon: 127.3845 },
@@ -41,12 +50,15 @@ app.get("/api/forecast", async (req, res) => {
       error: `Unknown city: ${cityKey}`,
     });
   }
+  counts[cityKey] = (counts[cityKey] ?? 0) + 1;
 
   const city = CITIES[cityKey];
 
   try {
-    const daily = await getDaily(cityKey);
+    const cityKey = req.query.city;
+    const city = CITIES[cityKey];
 
+    const daily = await getDaily(city);
     res.json({
       city: city.name,
       days: toDays(daily),
@@ -56,6 +68,20 @@ app.get("/api/forecast", async (req, res) => {
       error: error.message,
     });
   }
+});
+
+app.get("/api/stats", (req, res) => {
+  const authorization = req.get("Authorization");
+
+  if (
+    authorization !== `Bearer ${process.env.ADMIN_TOKEN}`
+  ) {
+    return res.status(401).json({
+      error: "Unauthorized",
+    });
+  }
+
+  res.json(counts);
 });
 
 app.listen(PORT, (error) => {
